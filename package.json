@@ -1,0 +1,55 @@
+{
+  "name": "html-carousel-renderer",
+  "version": "0.1.0",
+  "description": "HTML to image carousel generator: render JSON + HTML templates into Instagram 4:5 (1080x1350) card news images and a 9:16 reels video with headless Chromium (Playwright). Stops on text overflow, broken words (Korean word-break keep-all), overlapping text and network requests.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "html-carousel-renderer": "src/cli.mjs"
+  },
+  "exports": {
+    ".": "./src/render.mjs"
+  },
+  "files": [
+    "src",
+    "templates",
+    "examples",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "SECURITY.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "1.64.1"
+  },
+  "keywords": [
+    "html-to-image",
+    "instagram-carousel",
+    "carousel-generator",
+    "card-news",
+    "social-media-images",
+    "1080x1350",
+    "4:5",
+    "reels",
+    "9:16",
+    "video",
+    "headless-chrome",
+    "chromium",
+    "playwright",
+    "screenshot",
+    "korean",
+    "hangul",
+    "word-break",
+    "keep-all",
+    "line-breaking",
+    "text-overflow",
+    "typesetting",
+    "cli"
+  ]
+}

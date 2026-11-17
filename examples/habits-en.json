@@ -1,0 +1,21 @@
+{
+ "footer": "@your_account",
+ "cards": [
+  {
+   "template": "cover",
+   "kicker": "Field notes",
+   "title": "Five habits\nthat save time",
+   "subtitle": "Small changes that add up over a week."
+  },
+  {
+   "template": "list",
+   "label": "The list",
+   "items": "1. Write tomorrow's first task before you stop today.\n\n2. Keep one inbox and empty it once a day.\n\n3. Batch small errands into a single trip.\n\n4. Say no to meetings without an agenda.\n\n5. Leave ten minutes between calls."
+  },
+  {
+   "template": "quote",
+   "quote": "Progress comes from the boring things you repeat, not the big things you plan.",
+   "by": "Example quote"
+  }
+ ]
+}
