@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { createServer } from "node:http";
 import { createHash } from "node:crypto";
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -177,3 +177,28 @@ test("a template cannot load local files: a file: background is not drawn (pages
   assert.equal(withData.status, 0, withData.stderr);
   assert.notEqual(withData.manifest.images[0].sha256, plain.manifest.images[0].sha256);
 });
+
+test("a meta refresh in a template stops with TEMPLATE_NAVIGATION (plain, upper case, delayed, character reference)", () => {
+  for (const meta of ['<meta http-equiv="refresh" content="0;url=http://192.0.2.1/">', "<META HTTP-EQUIV=REFRESH CONTENT=0>", '<meta http-equiv="refresh" content="1">',
+    '<meta http-equiv="&#114;efresh" content="0">', '<meta http-equiv="&#114;efresh" content="5">']) {
+    stopped(run(EN, { templates: meta + BASIC, args: ["--no-video"] }), "TEMPLATE_NAVIGATION");
+  }
+});
+
+test("Ctrl-C (a real SIGINT) during a render removes the temporary folder and exits 130", async () => {
+  const parent = join(work, "sigint"); mkdirSync(parent);
+  const input = join(work, "sigint.json");
+  // many pages so the render is still running when the signal arrives
+  writeFileSync(input, JSON.stringify({ cards: [EN.cards[0], { template: "list", items: Array.from({ length: 200 }, (_, i) => `Line ${i + 1}`).join("\n") }] }));
+  const p = spawn(process.execPath, [CLI, input, join(parent, "out"), "--max-pages", "40", "--no-video"], { stdio: ["ignore", "pipe", "pipe"] });
+  const closed = new Promise((res) => p.on("close", (code, signal) => res({ code, signal })));
+  const tmpNow = () => readdirSync(parent).filter((f) => f.startsWith(".tmp-"));
+  for (let i = 0; i < 400 && tmpNow().length === 0; i++) await new Promise((r) => setTimeout(r, 10));
+  assert.equal(tmpNow().length, 1, "temporary folder appeared");
+  await new Promise((r) => setTimeout(r, 300));
+  p.kill("SIGINT");
+  const { code } = await closed;
+  assert.equal(code, 130);
+  assert.deepEqual(readdirSync(parent), [], "no .tmp-* and no output folder left");
+});
+

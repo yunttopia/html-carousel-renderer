@@ -85,6 +85,7 @@ The CLI exits with code 2 and prints `RENDER_STOP <CODE>: …`. No output folder
 | `OVERLAP` | Two visible text boxes overlap |
 | `PAGE_COUNT` | Number of pages outside `--min-pages`..`--max-pages` (default 2..20, Instagram's carousel range) |
 | `NET_BLOCKED` | The page tried to load anything other than a `data:` URL (the request is aborted inside the browser) |
+| `TEMPLATE_NAVIGATION` | The template contains `<meta http-equiv="refresh">` or otherwise navigated or reloaded the page |
 | `OUT_EXISTS` | The output folder already exists |
 | `VIDEO` | ffmpeg failed |
 
@@ -153,7 +154,7 @@ npm install && npx playwright-core install chromium && npm test
 CR_CHROME=/path/to/chrome CR_PLAYWRIGHT_CORE_DIR=/path/to/node_modules npm test
 ```
 
-There are 20 tests (`node:test`, no other test dependency):
+There are 22 tests (`node:test`, no other test dependency):
 - both examples render
 - page splitting with the last-page rule on and off
 - each stop code, including non-string values, a line too long for an empty page, video limits and built-in names such as `__proto__`
@@ -162,6 +163,8 @@ There are 20 tests (`node:test`, no other test dependency):
 - template scripts reach nothing: WebSocket, `sendBeacon` and `fetch` to a local test server arrive 0 times, and a script that would change the page has no effect
 - a template cannot load `file:` URLs
 - a missing output parent fails before a browser starts
+- a meta refresh (plain, delayed, written with a character reference) stops the render
+- a real SIGINT during a render removes the `.tmp-*` folder
 
 ## Limits
 

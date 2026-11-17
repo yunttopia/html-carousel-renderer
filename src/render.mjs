@@ -154,6 +154,8 @@ export async function render(o) {
   const { post, templatesHtml, outDir } = o;
   const minPages = o.minPages ?? 2, maxPages = o.maxPages ?? 20, minTail = o.minTailLines ?? 4;
   if (existsSync(outDir)) throw new RenderStop("OUT_EXISTS", "output folder already exists");
+  // A meta refresh navigates or reloads even with JavaScript off. Refuse it up front (a delayed one could fire after the render finished).
+  if (/<meta\b[^>]*http-equiv\s*=\s*["']?\s*refresh/i.test(templatesHtml)) throw new RenderStop("TEMPLATE_NAVIGATION", 'templates must not contain <meta http-equiv="refresh">');
   const { chromium } = await loadPlaywright(o.playwrightDir);
   const t0 = Date.now();
   // The temporary folder is made before the browser starts, so a missing parent folder fails without leaving a browser behind.
@@ -171,7 +173,20 @@ export async function render(o) {
     const netCheck = (where) => { if (blocked.length) throw new RenderStop("NET_BLOCKED", `${where}: ${blocked.length} request(s) blocked, first ${blocked[0].slice(0, 80)}`); };
 
     const page = await ctx.newPage();
+    // A template must not navigate or reload the page (e.g. <meta http-equiv="refresh">): count main-frame navigations after our own setContent.
+    let navigations = 0, lastNav = "";
+    page.on("framenavigated", (f) => { if (f === page.mainFrame()) { navigations++; lastNav = f.url(); } });
+    const navStop = () => new RenderStop("TEMPLATE_NAVIGATION", `the template navigated or reloaded the page (${(lastNav || "reload").slice(0, 80)}) — remove <meta http-equiv="refresh"> and similar`);
+    let navBase = 0;
+    const pages = [];
+    const navCheck = () => { if (navigations > navBase) throw navStop(); };
+    try {
     await page.setContent(`<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">${templatesHtml}<div id="stage"></div></body></html>`);
+    navBase = navigations;
+    // Same check on the parsed DOM (catches character references such as "&#114;efresh"), including inside <template> contents.
+    const hasRefresh = await page.evaluate(() => [document, ...[...document.querySelectorAll("template")].map((t) => t.content)]
+      .some((root) => [...root.querySelectorAll("meta[http-equiv]")].some((m) => m.getAttribute("http-equiv").trim().toLowerCase() === "refresh")));
+    if (hasRefresh) throw new RenderStop("TEMPLATE_NAVIGATION", 'templates must not contain <meta http-equiv="refresh">');
     await page.evaluate(PAGE_JS);
     const templates = await readTemplates(page);
     validate(post, templates);
@@ -185,7 +200,6 @@ export async function render(o) {
     }
     if (sheets.length < minPages || sheets.length > maxPages) throw new RenderStop("PAGE_COUNT", `${sheets.length} pages (allowed ${minPages}..${maxPages})`);
 
-    const pages = [];
     for (let i = 0; i < sheets.length; i++) {
       const s = { ...sheets[i].slots, page: `${i + 1}/${sheets.length}` };
       const { bad, lines } = await page.evaluate(([n, v]) => { const node = window.__cr.make(n, v); const sp = node.querySelector("[data-split]"); return { bad: window.__cr.check(node), lines: sp ? window.__cr.lines(sp) : null }; }, [sheets[i].template, s]);
@@ -195,6 +209,13 @@ export async function render(o) {
       writeFileSync(join(tmp, file), buf);
       pages.push({ file, template: sheets[i].template, card: sheets[i].card, width: PAGE.width, height: PAGE.height, ...(lines !== null ? { split_lines: lines } : {}), sha256: sha256(buf) });
     }
+    navCheck();
+    } catch (e) {
+      // A navigation destroys the page's execution context, so whatever failed first is reported as the navigation that caused it.
+      const destroyed = !(e instanceof RenderStop) && /Execution context was destroyed|navigat/i.test(String(e?.message ?? ""));
+      if (navigations > navBase || destroyed || (navBase === 0 && navigations > 0 && !(e instanceof RenderStop))) throw navStop();
+      throw e;
+    }
     netCheck("pages");
 
     const ff = o.video === false ? null : detectFfmpeg(o.ffmpeg ?? "ffmpeg");
@@ -202,7 +223,7 @@ export async function render(o) {
     netCheck("video");
 
     const manifest = { tool: "html-carousel-renderer", version: VERSION, pages: pages.length, images: pages, video,
-      checks: { overflow: 0, keep_all: 0, overlap: 0, network_blocked: 0, page_count: `${minPages}..${maxPages}`, min_tail_lines: minTail }, ms: Date.now() - t0 };
+      checks: { overflow: 0, keep_all: 0, overlap: 0, network_blocked: 0, navigation: 0, page_count: `${minPages}..${maxPages}`, min_tail_lines: minTail }, ms: Date.now() - t0 };
     writeFileSync(join(tmp, "manifest.json"), JSON.stringify(manifest, null, 1) + "\n");
     renameSync(tmp, outDir);
     activeTmp.delete(tmp);
