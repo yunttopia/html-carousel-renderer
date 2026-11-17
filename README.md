@@ -154,7 +154,7 @@ npm install && npx playwright-core install chromium && npm test
 CR_CHROME=/path/to/chrome CR_PLAYWRIGHT_CORE_DIR=/path/to/node_modules npm test
 ```
 
-There are 22 tests (`node:test`, no other test dependency):
+There are 23 tests (`node:test`, no other test dependency):
 - both examples render
 - page splitting with the last-page rule on and off
 - each stop code, including non-string values, a line too long for an empty page, video limits and built-in names such as `__proto__`
@@ -165,6 +165,7 @@ There are 22 tests (`node:test`, no other test dependency):
 - a missing output parent fails before a browser starts
 - a meta refresh (plain, delayed, written with a character reference) stops the render
 - a real SIGINT during a render removes the `.tmp-*` folder
+- an ordinary error is reported as an error, not as `TEMPLATE_NAVIGATION`
 
 ## Limits
 

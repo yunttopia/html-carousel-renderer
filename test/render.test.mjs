@@ -202,3 +202,12 @@ test("Ctrl-C (a real SIGINT) during a render removes the temporary folder and ex
   assert.deepEqual(readdirSync(parent), [], "no .tmp-* and no output folder left");
 });
 
+test("an ordinary error is not reported as TEMPLATE_NAVIGATION (empty template body → exit 1)", () => {
+  // <template id="tpl-blank"> has no element inside, so the renderer cannot build the card: a plain error, not a stop code
+  const r = run({ cards: [EN.cards[0], { template: "blank" }] }, { templates: BASIC + '<template id="tpl-blank"></template>', args: ["--no-video"] });
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stderr, /RENDER_STOP ERROR /);
+  assert.doesNotMatch(r.stderr, /TEMPLATE_NAVIGATION/);
+  assert.equal(existsSync(r.out), false);
+});
+

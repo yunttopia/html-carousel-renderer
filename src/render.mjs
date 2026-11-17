@@ -154,8 +154,6 @@ export async function render(o) {
   const { post, templatesHtml, outDir } = o;
   const minPages = o.minPages ?? 2, maxPages = o.maxPages ?? 20, minTail = o.minTailLines ?? 4;
   if (existsSync(outDir)) throw new RenderStop("OUT_EXISTS", "output folder already exists");
-  // A meta refresh navigates or reloads even with JavaScript off. Refuse it up front (a delayed one could fire after the render finished).
-  if (/<meta\b[^>]*http-equiv\s*=\s*["']?\s*refresh/i.test(templatesHtml)) throw new RenderStop("TEMPLATE_NAVIGATION", 'templates must not contain <meta http-equiv="refresh">');
   const { chromium } = await loadPlaywright(o.playwrightDir);
   const t0 = Date.now();
   // The temporary folder is made before the browser starts, so a missing parent folder fails without leaving a browser behind.
@@ -173,17 +171,12 @@ export async function render(o) {
     const netCheck = (where) => { if (blocked.length) throw new RenderStop("NET_BLOCKED", `${where}: ${blocked.length} request(s) blocked, first ${blocked[0].slice(0, 80)}`); };
 
     const page = await ctx.newPage();
-    // A template must not navigate or reload the page (e.g. <meta http-equiv="refresh">): count main-frame navigations after our own setContent.
-    let navigations = 0, lastNav = "";
-    page.on("framenavigated", (f) => { if (f === page.mainFrame()) { navigations++; lastNav = f.url(); } });
-    const navStop = () => new RenderStop("TEMPLATE_NAVIGATION", `the template navigated or reloaded the page (${(lastNav || "reload").slice(0, 80)}) — remove <meta http-equiv="refresh"> and similar`);
-    let navBase = 0;
     const pages = [];
-    const navCheck = () => { if (navigations > navBase) throw navStop(); };
     try {
     await page.setContent(`<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0">${templatesHtml}<div id="stage"></div></body></html>`);
-    navBase = navigations;
-    // Same check on the parsed DOM (catches character references such as "&#114;efresh"), including inside <template> contents.
+    // A meta refresh navigates or reloads even with JavaScript off. Refuse it on the parsed DOM, including <template> contents and
+    // character references such as "&#114;efresh"; a delayed one would otherwise fire after the render. An immediate one destroys the
+    // page context first and is mapped to the same stop code in the catch below.
     const hasRefresh = await page.evaluate(() => [document, ...[...document.querySelectorAll("template")].map((t) => t.content)]
       .some((root) => [...root.querySelectorAll("meta[http-equiv]")].some((m) => m.getAttribute("http-equiv").trim().toLowerCase() === "refresh")));
     if (hasRefresh) throw new RenderStop("TEMPLATE_NAVIGATION", 'templates must not contain <meta http-equiv="refresh">');
@@ -209,11 +202,10 @@ export async function render(o) {
       writeFileSync(join(tmp, file), buf);
       pages.push({ file, template: sheets[i].template, card: sheets[i].card, width: PAGE.width, height: PAGE.height, ...(lines !== null ? { split_lines: lines } : {}), sha256: sha256(buf) });
     }
-    navCheck();
     } catch (e) {
-      // A navigation destroys the page's execution context, so whatever failed first is reported as the navigation that caused it.
-      const destroyed = !(e instanceof RenderStop) && /Execution context was destroyed|navigat/i.test(String(e?.message ?? ""));
-      if (navigations > navBase || destroyed || (navBase === 0 && navigations > 0 && !(e instanceof RenderStop))) throw navStop();
+      // A navigation or reload destroys the page's execution context; report that as the template's doing, not as a generic error.
+      if (!(e instanceof RenderStop) && /Execution context was destroyed/.test(String(e?.message ?? "")))
+        throw new RenderStop("TEMPLATE_NAVIGATION", 'the template navigated or reloaded the page — remove <meta http-equiv="refresh"> and similar');
       throw e;
     }
     netCheck("pages");
