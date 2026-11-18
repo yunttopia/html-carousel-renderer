@@ -1,5 +1,7 @@
 # html-carousel-renderer
 
+[![CI](https://github.com/yunttopia/html-carousel-renderer/actions/workflows/ci.yml/badge.svg)](https://github.com/yunttopia/html-carousel-renderer/actions/workflows/ci.yml)
+
 **HTML to image carousel generator.** It renders a JSON post and HTML/CSS templates with headless Chromium (Playwright). You get:
 - **Instagram carousel** / **card news** images at **4:5, 1080×1350** (JPEG)
 - a **9:16 reels / shorts video** of the same pages (MP4 or WebM via ffmpeg)
